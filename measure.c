@@ -8,10 +8,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #define debug 0
 
-struct m_tree_t {
+typedef struct m_tree_t {
 	int key;
 	int height;
 	int leftmin;
@@ -21,13 +22,13 @@ struct m_tree_t {
 	int measure;
 	struct m_tree_t *left;
 	struct m_tree_t *right;
-};
+} m_tree_t;
 
-struct interval {
+typedef struct interval {
 	int a;
 	int b;
 	struct interval *next;
-};
+} interval;
 
 m_tree_t * create_m_tree() {
 	m_tree_t *tmp_node;
@@ -91,8 +92,11 @@ void left_rotation(m_tree_t *n) {
 	n->left->left = tmp_node;
 
 	n->left->key = tmp_key;
+	n->left->l = n->l;
+	n->left->r = n->key;
 	n->left->leftmin = min(n->left->left->leftmin, n->left->right->leftmin);
 	n->left->rightmax = max(n->left->left->rightmax, n->left->right->rightmax);
+
 
 	n->left->measure = update_measure(n->left);
 }
@@ -110,6 +114,8 @@ void right_rotation(m_tree_t *n) {
 	n->right->right = tmp_node;
 
 	n->right->key = tmp_key;
+	n->right->l = n->key;
+	n->right->r = n->r;
 	n->right->leftmin = min(n->right->left->leftmin, n->right->right->leftmin);
 	n->right->rightmax = max(n->right->left->rightmax,
 			n->right->right->rightmax);
@@ -249,7 +255,23 @@ void insert(m_tree_t * tree, int new_key, int endpoint) {
 					tmp_node->right->rightmax);
 			tmp_node->measure = update_measure(tmp_node);
 		}
+		tmp_node->measure = update_measure(tmp_node);
+
+		/* update variables of all the nodes in the stack */
+
+		int path_st_p2 = path_st_p;
+
+		while (path_st_p2 > 0) {
+			tmp_node = path_stack[--path_st_p2];
+			tmp_node->leftmin = min(tmp_node->left->leftmin,
+					tmp_node->right->leftmin);
+			tmp_node->rightmax = max(tmp_node->left->rightmax,
+					tmp_node->right->rightmax);
+			tmp_node->measure = update_measure(tmp_node);
+		}
+
 		/* rebalance */
+
 		finished = 0;
 		while (path_st_p > 0 && !finished) {
 			int tmp_height, old_height;
@@ -300,5 +322,52 @@ void insert(m_tree_t * tree, int new_key, int endpoint) {
 void insert_interval(m_tree_t * tree, int a, int b) {
 	insert(tree, a, b);
 	insert(tree, b, a);
+}
+
+int query_length(m_tree_t * tree) {
+	return tree->measure;
+}
+
+//Main function for testing
+int main(int argc, char **argv) {
+	m_tree_t *tree1, *tree2, *tree3;
+	tree1 = create_m_tree();
+	insert_interval(tree1, 2, 3);
+	int query1, query2, query3;
+	query1 = query_length(tree1);
+	printf("After inserting interval [2,3[, query length is %d\n", query1);
+
+	tree2 = create_m_tree();
+	insert_interval(tree2, 3, 5);
+	query2 = query_length(tree2);
+	printf("After inserting interval [3,5[, query length is %d\n", query2);
+	printf("Measure of tree 2 is = %d\n", tree2->measure);
+
+	tree3 = create_m_tree();
+	insert_interval(tree3, 3, 5);
+	insert_interval(tree3, 6, 7);
+	insert_interval(tree3, 2, 3);
+	query3 = query_length(tree3);
+	printf("After inserting intervals [3,5[ and [6,7[, query length is %d\n",
+			query3);
+	printf("Height of tree3 is %d\n", tree3->height);
+	printf("Key of tree3 is %d\n", tree3->key);
+	printf("Keys of left and right subtrees of tree3 are %d, %d\n",
+			tree3->left->key, tree3->right->key);
+	printf("Keys of children of left subtree - %d, %d\n",
+			tree3->left->left->key, tree3->left->right->key);
+	printf("Keys of children of right subtree - %d, %d\n",
+			tree3->right->left->key, tree3->right->right->key);
+	printf("Root parameters\n");
+	printf("Leftmin = %d\n", tree3->leftmin);
+	printf("Rightmax = %d\n", tree3->rightmax);
+	printf("L = %d\n", tree3->l);
+	printf("R = %d\n", tree3->r);
+	printf("Parameters of left subtree of root\n");
+	printf("Leftmin = %d\n", tree3->left->leftmin);
+	printf("Rightmax = %d\n", tree3->left->rightmax);
+	printf("Measure = %d\n", update_measure(tree3->left));
+
+	return 0;
 }
 
