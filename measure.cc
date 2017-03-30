@@ -12,7 +12,7 @@
 
 #define debug 0
 
-typedef struct m_tree_t {
+struct m_tree_t {
 	int key;
 	int height;
 	int leftmin;
@@ -22,13 +22,13 @@ typedef struct m_tree_t {
 	int measure;
 	struct m_tree_t *left;
 	struct m_tree_t *right;
-} m_tree_t;
+};
 
-typedef struct interval {
+struct interval {
 	int a;
 	int b;
 	struct interval *next;
-} interval;
+};
 
 m_tree_t * create_m_tree() {
 	m_tree_t *tmp_node;
@@ -225,7 +225,7 @@ void insert(m_tree_t * tree, int new_key, int endpoint) {
 				tmp_node->left = old_leaf;
 				tmp_node->right = new_leaf;
 				tmp_node->key = new_key;
-				//update new_leaf's l, r and measure
+				//update new_leaf's and old_leaf's l, r and measure
 				new_leaf->l = tmp_node->key;
 				new_leaf->r = tmp_node->r;
 				new_leaf->measure = update_measure(new_leaf);
@@ -240,7 +240,7 @@ void insert(m_tree_t * tree, int new_key, int endpoint) {
 
 				tmp_node->left = new_leaf;
 				tmp_node->right = old_leaf;
-				//update new leaf's l, r and measure
+				//update new leaf's and old leaf's l, r and measure
 				new_leaf->l = tmp_node->l;
 				new_leaf->r = tmp_node->key;
 				new_leaf->measure = update_measure(new_leaf);
@@ -310,8 +310,8 @@ void insert(m_tree_t * tree, int new_key, int endpoint) {
 					tmp_node->right->height = tmp_height + 1;
 					tmp_node->height = tmp_height + 2;
 				}
-			} else /* update height even if there was no rotation */
-			{
+			} else {
+				/* update height even if there was no rotation */
 				if (tmp_node->left->height > tmp_node->right->height)
 					tmp_node->height = tmp_node->left->height + 1;
 				else
@@ -336,10 +336,12 @@ int query_length(m_tree_t * tree) {
 	return tree->measure;
 }
 
-void delete(m_tree_t *tree, int delete_key, int endpoint) {
+void delete_int(m_tree_t *tree, int delete_key, int endpoint) {
 	m_tree_t *tmp_node, *upper_node, *other_node;
-	int super_flag = 0;
 	m_tree_t *super_node = NULL;
+	tmp_node = NULL;
+	upper_node = NULL;
+	other_node = NULL;
 	interval *deleted_object;
 	int finished;
 	if (tree->left == NULL) {
@@ -349,9 +351,13 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 			deleted_object = (interval *) tree->left;
 			tree->left = NULL;
 			tree->key = 0;
+			tree->height = 0;
+			tree->l = -INFINITY;
+			tree->r = +INFINITY;
 			tree->leftmin = 0;
 			tree->rightmax = 0;
 			tree->measure = 0;
+			free(tree->left);
 			return;
 		} else
 			return;
@@ -361,14 +367,12 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 		tmp_node = tree;
 		while (tmp_node->right != NULL) {
 			path_stack[path_st_p++] = tmp_node;
+
 			upper_node = tmp_node;
 			if (delete_key < tmp_node->key) {
 				tmp_node = upper_node->left;
 				other_node = upper_node->right;
 			} else {
-				if (delete_key == tmp_node->key) {
-					super_node = tmp_node;
-				}
 				tmp_node = upper_node->right;
 				other_node = upper_node->left;
 			}
@@ -376,6 +380,7 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 		if (tmp_node->key != delete_key) {
 
 			deleted_object = NULL;
+			return;
 
 		} else {
 
@@ -402,7 +407,7 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 			} else {
 				if ((counter == 1) && (interval_to_delete->next == NULL)) {
 					//only 1 node in linked list
-					super_flag = 1;
+
 					upper_node->key = other_node->key;
 					upper_node->left = other_node->left;
 					upper_node->right = other_node->right;
@@ -410,19 +415,41 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 					upper_node->leftmin = other_node->leftmin;
 					upper_node->rightmax = other_node->rightmax;
 					deleted_object = (interval *) tmp_node->left;
-					upper_node->measure = update_measure(upper_node);
+					if (upper_node->right != NULL) {
+						upper_node->right->r = upper_node->r;
+						upper_node->left->l = upper_node->l;
+					}
+
+					upper_node->measure = other_node->measure;
+
 					free(tmp_node->left);
+
+					/* Find the immediate successor key if it exists and replace the upper node key */
+
+					if (tree->key == delete_key) {
+						super_node = tree->right;
+						while (super_node->right != NULL) {
+							super_node = super_node->left;
+						}
+						tree->key = super_node->key;
+						tree->left->r = tree->key;
+						tree->right->l = tree->key;
+						tree->left->measure = update_measure(tree->left);
+						tree->right->measure = update_measure(tree->right);
+					}
+
 				} else if ((counter == 1)
 						&& (interval_to_delete->next != NULL)) {
 					//first node in the linked list
 					tmp_node->left = (m_tree_t *) interval_to_delete->next;
 					deleted_object = (interval *) interval_to_delete;
+					free(interval_to_delete);
 					//Traverse linked list and update variables of tmp_node
 					int min, max;
-					min = tmp_node->leftmin;
-					max = tmp_node->rightmax;
 					old_interval = (interval *) tmp_node->left;
-					while (old_interval->next != NULL) {
+					min = old_interval->a;
+					max = old_interval->b;
+					while (old_interval != NULL) {
 						if (old_interval->a < min) {
 							min = old_interval->a;
 						}
@@ -434,16 +461,17 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 					tmp_node->leftmin = min;
 					tmp_node->rightmax = max;
 					tmp_node->measure = update_measure(tmp_node);
-					free(interval_to_delete);
+
 				} else {
 					//some node in the linked list
 					prev_interval->next = interval_to_delete->next;
 					deleted_object = (interval *) interval_to_delete;
+					free(interval_to_delete);
 					int min, max;
-					min = tmp_node->leftmin;
-					max = tmp_node->rightmax;
 					old_interval = (interval *) tmp_node->left;
-					while (old_interval->next != NULL) {
+					min = old_interval->a;
+					max = old_interval->b;
+					while (old_interval != NULL) {
 						if (old_interval->a < min) {
 							min = old_interval->a;
 						}
@@ -455,24 +483,12 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 					tmp_node->leftmin = min;
 					tmp_node->rightmax = max;
 					tmp_node->measure = update_measure(tmp_node);
-					free(interval_to_delete);
 				}
 			}
 		}
 
-		//Find the immediate successor key if it exists and replace the upper node key
-		if (super_flag == 1 && super_node != NULL) {
-			if (super_node->right != NULL) {
-				tmp_node = super_node->right;
-				if (tmp_node->right != NULL) {
-					tmp_node = tmp_node->left;
-					while (tmp_node->right != NULL) {
-						tmp_node = tmp_node->left;
-					}
-					super_node->key = tmp_node->key;
-				}
-			}
-		}
+
+
 		/* update variables of all the nodes in the stack */
 		int path_st_p2 = path_st_p;
 
@@ -486,11 +502,11 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 				tmp_node->measure = update_measure(tmp_node);
 			} else {
 				int min, max;
-				min = tmp_node->leftmin;
-				max = tmp_node->rightmax;
 				interval *old_interval;
 				old_interval = (interval *) tmp_node->left;
-				while (old_interval->next != NULL) {
+				min = old_interval->a;
+				max = old_interval->b;
+				while (old_interval != NULL) {
 					if (old_interval->a < min) {
 						min = old_interval->a;
 					}
@@ -540,8 +556,10 @@ void delete(m_tree_t *tree, int delete_key, int endpoint) {
 					tmp_node->right->height = tmp_height + 1;
 					tmp_node->height = tmp_height + 2;
 				}
-			} else /* update height even if there was no rotation */
-			{
+			} else {
+
+				/* update height even if there was no rotation */
+
 				if (tmp_node->left->height > tmp_node->right->height)
 					tmp_node->height = tmp_node->left->height + 1;
 				else
@@ -557,90 +575,12 @@ void delete_interval(m_tree_t * tree, int a, int b) {
 	if (a > b)
 		return;
 	else {
-		delete(tree, a, b);
-		delete(tree, b, a);
+		delete_int(tree, a, b);
+		delete_int(tree, b, a);
 	}
 }
 
 void destroy_m_tree(m_tree_t *tree) {
 	free(tree);
-}
-
-//Main function for testing
-
-int main(int argc, char **argv) {
-	m_tree_t *tree_, *tree3;
-	int q1, q2, q3;
-//
-	tree_ = create_m_tree();
-
-	delete_interval(tree_, 1, 2);
-
-	insert_interval(tree_, 1, 2);
-	delete_interval(tree_, 1, 3);
-//
-	delete_interval(tree_, 1, 2);
-//
-	insert_interval(tree_, 1, 2);
-	insert_interval(tree_, 2, 4);
-	delete_interval(tree_, 1, 2);
-//
-	insert_interval(tree_, 5, 9);
-	delete_interval(tree_, 2, 4);
-////
-	insert_interval(tree_, 6, 8);
-	delete_interval(tree_, 5, 9);
-////
-	insert_interval(tree_, 7, 10);
-	delete_interval(tree_, 6, 8);
-////
-	insert_interval(tree_, 6, 8);
-	delete_interval(tree_, 7, 10);
-////
-	insert_interval(tree_, 2, 10);
-	delete_interval(tree_, 6, 8);
-//
-	insert_interval(tree_, -1, 2);
-	delete_interval(tree_, 2, 10);
-//
-//	delete_interval(tree_, -1, 2);
-
-	q3 = query_length(tree_);
-	printf("%d\n\n", q3);
-
-//	tree3 = create_m_tree();
-//	insert_interval(tree3, 3, 5);
-//	insert_interval(tree3, 6, 7);
-//	insert_interval(tree3, 2, 3);
-//	insert_interval(tree3, 3, 7);
-//	insert_interval(tree3, 3, 5);
-	//insert_interval(tree3, 2, 4);
-
-//	delete_interval(tree, 1, 2);
-//	q = query_length(tree);
-//	int query3 = query_length(tree);
-//	printf("After inserting intervals, query length is %d\n", query3);
-//	printf("Height of tree3 is %d\n", tree->height);
-//	printf("Key of tree3 is %d\n", tree->key);
-//	printf("Keys of left and right subtrees of tree3 are %d, %d\n",
-//			tree->left->key, tree->right->key);
-////	printf("Keys of children of left subtree - %d, %d\n",
-////			tree3->left->left->key, tree3->left->right->key);
-//	//printf("Keys of children of right subtree - %d\n",
-//			//tree3->right->right->key);
-//	printf("Root parameters\n");
-//	printf("Leftmin = %d\n", tree->leftmin);
-//	printf("Rightmax = %d\n", tree->rightmax);
-//	printf("L = %d\n", tree->l);
-//	printf("R = %d\n", tree->r);
-//	printf("Parameters of right subtree of root\n");
-//	printf("Leftmin = %d\n", tree->right->leftmin);
-//	printf("Rightmax = %d\n", tree->right->rightmax);
-//	printf("Measure = %d\n\n", update_measure(tree->right));
-//	printf("Children of right subtree = %d, %d\n", tree->right->left->key, tree->right->right->key);
-//	printf("Left child parameters = %d, %d, %d\n", tree->right->left->leftmin, tree->right->left->rightmax, tree->right->left->measure);
-//	printf("Right child parameters = %d, %d, %d\n", tree->right->right->leftmin, tree->right->right->rightmax, tree->right->right->measure);
-
-	return 0;
 }
 
